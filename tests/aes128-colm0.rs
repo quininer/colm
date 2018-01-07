@@ -39,51 +39,99 @@ fn test() {
     let mut c = vec![0; m.len() + BLOCK_LENGTH];
 
 
+    // encrypt 1
     let cipher: Colm<AesCipher> = Colm::new(&key);
     let mut process = cipher.encrypt(&nonce, &m[..10]);
 
     {
-        let take = if m.len() % 16 == 0 {
-            (m.len() / 16 - 1) * 16
-        } else {
-            m.len() / 16 * 16
-        };
+        let take =
+            if m.len() % 16 == 0 { (m.len() / 16 - 1) * 16 }
+            else { m.len() / 16 * 16 };
 
         let (input, input_remaining) = m.split_at(take);
         let (output, output_remaining) = c.split_at_mut(take);
-        let input = input.chunks(BLOCK_LENGTH).map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
-        let output = output.chunks_mut(BLOCK_LENGTH).map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
+        let input = input.chunks(BLOCK_LENGTH)
+            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
+        let output = output.chunks_mut(BLOCK_LENGTH)
+            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
 
-        process.process2(input, output);
+        process.process(input, output);
         process.finalize(input_remaining, output_remaining);
     }
 
     assert_eq!(c, C);
 
 
-    let m = &m[..32];
-    let mut c = vec![0; m.len() + BLOCK_LENGTH];
-
-    let cipher: Colm<AesCipher> = Colm::new(&key);
-    let mut process = cipher.encrypt(&nonce, &m[..16]);
+    // encrypt 2
+    let m2 = &m[..32];
+    let mut c2 = vec![0; m2.len() + BLOCK_LENGTH];
+    let mut process = cipher.encrypt(&nonce, &m2[..16]);
 
     {
-        let take = if m.len() % 16 == 0 {
-            (m.len() / 16 - 1) * 16
-        } else {
-            m.len() / 16 * 16
-        };
+        let take =
+            if m2.len() % 16 == 0 { (m2.len() / 16 - 1) * 16 }
+            else { m2.len() / 16 * 16 };
 
         assert_eq!(take, 16);
 
-        let (input, input_remaining) = m.split_at(take);
-        let (output, output_remaining) = c.split_at_mut(take);
-        let input = input.chunks(BLOCK_LENGTH).map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
-        let output = output.chunks_mut(BLOCK_LENGTH).map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
+        let (input, input_remaining) = m2.split_at(take);
+        let (output, output_remaining) = c2.split_at_mut(take);
+        let input = input.chunks(BLOCK_LENGTH)
+            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
+        let output = output.chunks_mut(BLOCK_LENGTH)
+            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
 
-        process.process2(input, output);
+        process.process(input, output);
         process.finalize(input_remaining, output_remaining);
     }
 
-    assert_eq!(c, C2);
+    assert_eq!(c2, C2);
+
+
+    // decrypt 1
+    let mut p = vec![0; m.len()];
+    let mut process = cipher.decrypt(&nonce, &m[..10]);
+
+    {
+        let take =
+            if c.len() % 16 == 0 { (c.len() / 16 - 2) * 16 }
+            else { (c.len() / 16 - 1) * 16 };
+
+        let (input, input_remaining) = c.split_at(take);
+        let (output, output_remaining) = p.split_at_mut(take);
+        let input = input.chunks(BLOCK_LENGTH)
+            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
+        let output = output.chunks_mut(BLOCK_LENGTH)
+            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
+
+        process.process(input, output);
+        let r = process.finalize(input_remaining, output_remaining);
+        assert!(r);
+    }
+
+    assert_eq!(&p[..], &m[..]);
+
+
+    // decrypt 2
+    let mut p2 = vec![0; m2.len()];
+    let mut process = cipher.decrypt(&nonce, &m[..16]);
+
+    {
+        let take =
+            if c2.len() % 16 == 0 { (c2.len() / 16 - 2) * 16 }
+            else { (c2.len() / 16 - 1) * 16 };
+
+        let (input, input_remaining) = c2.split_at(take);
+        let (output, output_remaining) = p2.split_at_mut(take);
+        let input = input.chunks(BLOCK_LENGTH)
+            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
+        let output = output.chunks_mut(BLOCK_LENGTH)
+            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
+
+        process.process(input, output);
+        let r = process.finalize(input_remaining, output_remaining);
+        assert!(r);
+    }
+
+    assert_eq!(&p2[..], &m2[..]);
 }

@@ -2,11 +2,13 @@
 
 extern crate core;
 #[macro_use] extern crate arrayref;
+extern crate subtle;
 
 #[macro_use] mod module;
 pub mod traits;
 
 use core::iter;
+use subtle::slices_equal;
 use traits::{ KEY_LENGTH, BLOCK_LENGTH };
 use traits::BlockCipher;
 use module::*;
@@ -76,14 +78,16 @@ impl<BC: BlockCipher> Colm<BC> {
         }
     }
 
-    /*
-    pub fn auth(&self, nonce: &[u8; NONCE_LENGTH], aad: &[u8], output: &mut [u8; BLOCK_LENGTH]) {
-        let mut process = self.encrypt(nonce, aad);
-        let mut buf = Block::default();
-        buf[0] = 0x80;
-        Process0::process_block(&mut process, State::Last, &buf, output);
+    pub fn decrypt<'a>(&'a self, nonce: &[u8; NONCE_LENGTH], aad: &[u8]) -> Process0<'a, BC, D> {
+        let (delta1, delta2, w) = self.init(nonce, aad);
+
+        Process0 {
+            cipher: &self.0,
+            delta1, delta2, w,
+            cs: Block::default(),
+            _mode: D
+        }
     }
-    */
 }
 
 pub struct Process0<'a, BC: BlockCipher + 'a, Mode> {
@@ -96,16 +100,14 @@ pub struct Process0<'a, BC: BlockCipher + 'a, Mode> {
 }
 
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
-    pub fn process2<'b, I, O>(&mut self, input: I, output: O)
+    pub fn process<'b, I, O>(&mut self, input: I, output: O)
         where
             I: Iterator<Item = &'b [u8; BLOCK_LENGTH]>,
             O: Iterator<Item = &'b mut [u8; BLOCK_LENGTH]>
     {
         for (input, output) in input.zip(output) {
-            for i in 0..BLOCK_LENGTH {
-                self.cs[i] ^= input[i];
-            }
-            Self::process_block(self, State::Process, input, output);
+            xor!(&mut self.cs, input);
+            self.process_block(State::Process, input, output);
         }
     }
 
@@ -122,20 +124,69 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
         let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
 
         let state =
-            if len == BC::BLOCK_LENGTH { State::LastFul }
-            else {
+            if len < BC::BLOCK_LENGTH {
                 buf[len] = 0x80;
                 State::Last
-            };
+            } else { State::LastFul };
 
-        for i in 0..BLOCK_LENGTH {
-            buf[i] ^= self.cs[i];
-        }
-        Self::process_block(&mut self, state, &buf, output);
+        xor!(&mut buf, &self.cs);
+        self.process_block(state, &buf, output);
 
         // Process checksum block
         let mut tmp = Block::default();
-        Self::process_block(&mut self, State::Tag, &buf, &mut tmp);
+        self.process_block(State::Tag, &buf, &mut tmp);
         tag.copy_from_slice(&tmp[..tag.len()]);
+    }
+}
+
+
+impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
+    pub fn process<'b, I, O>(&mut self, input: I, output: O)
+        where
+            I: Iterator<Item = &'b [u8; BLOCK_LENGTH]>,
+            O: Iterator<Item = &'b mut [u8; BLOCK_LENGTH]>
+    {
+        for (input, output) in input.zip(output) {
+            self.process_block(State::Process, input, output);
+            xor!(&mut self.cs, output);
+        }
+    }
+
+    pub fn finalize(mut self, input: &[u8], output: &mut [u8]) -> bool {
+        const OZS: [u8; 16] = [
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        ];
+
+        assert!(!input.is_empty());
+        assert!(input.len() > BC::BLOCK_LENGTH && input.len() <= 2 * BC::BLOCK_LENGTH);
+        assert_eq!(input.len(), output.len() + BC::BLOCK_LENGTH);
+
+        let len = input.len() - BC::BLOCK_LENGTH;
+        let mut buf = Block::default();
+        let (input, tag) = input.split_at(BC::BLOCK_LENGTH);
+        let input = array_ref!(input, 0, BLOCK_LENGTH);
+
+        let state =
+            if len < BC::BLOCK_LENGTH { State::Last }
+            else { State::LastFul };
+
+        self.process_block(state, input, &mut buf);
+        xor!(&mut self.cs, &buf);
+        let (val, remaining) = self.cs.split_at(tag.len());
+        output.copy_from_slice(val);
+
+        let r = slices_equal(remaining, &OZS[..remaining.len()]);
+
+
+        // Process checksum block
+        let Process0 { cipher, delta1, delta2, w, cs, .. } = self;
+        let mut process = Process0 { cipher, delta1, delta2, w, cs, _mode: E };
+
+        let mut tmp = Block::default();
+        process.process_block(State::Tag, &buf, &mut tmp);
+        let r2 = slices_equal(tag, &tmp[..tag.len()]);
+
+        r == 1 && r2 == 1
     }
 }
