@@ -5,3 +5,7 @@ authors = ["quininer <quininer@live.com>"]
 
 [dependencies]
 arrayref = "*"
+
+[dev-dependencies]
+generic-array = "*"
+aesni = "*"

@@ -42,19 +42,22 @@ impl<BC: BlockCipher> Colm<BC> {
         let mut nonce_block = Block::default();
         // make the first block blk based on npub and param
         nonce_block[..NONCE_LENGTH].copy_from_slice(nonce);
-        nonce_block[NONCE_LENGTH] = 0x80;
 
         iter::once(&nonce_block[..])
             .chain(aad.chunks(BC::BLOCK_LENGTH))
             .for_each(|next| {
                 // Process the current Block
+                let len = next.len();
                 let mut xx = Block::default();
-                if next.len() < BC::BLOCK_LENGTH {
-                    mult!(x7; delta0, delta0);
+
+                xx[..len].copy_from_slice(next);
+                if len < BC::BLOCK_LENGTH {
+                    xx[len] = 0x80;
+                    mult!(x7; &mut delta0, &delta0);
                 } else {
-                    mult!(x2; delta0, delta0);
+                    mult!(x2; &mut delta0, &delta0);
                 }
-                xor!(xx, next, delta0);
+                xor!(xx, delta0);
                 self.0.encrypt(&mut xx);
                 xor!(w, xx);
             });
@@ -68,10 +71,19 @@ impl<BC: BlockCipher> Colm<BC> {
         Process0 {
             cipher: &self.0,
             delta1, delta2, w,
-            buf: Block::default(),
+            cs: Block::default(),
             _mode: E
         }
     }
+
+    /*
+    pub fn auth(&self, nonce: &[u8; NONCE_LENGTH], aad: &[u8], output: &mut [u8; BLOCK_LENGTH]) {
+        let mut process = self.encrypt(nonce, aad);
+        let mut buf = Block::default();
+        buf[0] = 0x80;
+        Process0::process_block(&mut process, State::Last, &buf, output);
+    }
+    */
 }
 
 pub struct Process0<'a, BC: BlockCipher + 'a, Mode> {
@@ -79,79 +91,51 @@ pub struct Process0<'a, BC: BlockCipher + 'a, Mode> {
     delta1: Block,
     delta2: Block,
     w: Block,
-    buf: Block,
+    cs: Block,
     _mode: Mode
 }
 
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
-    fn process_buf(&mut self, block: &mut Block) {
-        let mut xx = Block::default();
-
-        // Mask
-        mult!(x2; self.delta1, self.delta1);
-        xor!(xx, self.buf, self.delta1);
-
-        // Encrypt
-        self.cipher.encrypt(&mut xx);
-
-        // Linear Mixing
-        p(&mut self.w, block, &xx);
-
-        // Encrypt
-        self.cipher.encrypt(block);
-
-        // Mask
-        mult!(x2; self.delta2, self.delta2);
-        xor!(block, self.delta2);
-    }
-
-    pub fn process<'b>(&mut self, input: &'b [u8], output: &mut [u8]) -> Result<(), &'b [u8]> {
-        assert_eq!(input.len(), output.len());
-
-        for (input, output) in input.chunks(BC::BLOCK_LENGTH)
-            .zip(output.chunks_mut(BC::BLOCK_LENGTH))
-        {
-            if input.len() < BC::BLOCK_LENGTH {
-                return Err(input);
+    pub fn process2<'b, I, O>(&mut self, input: I, output: O)
+        where
+            I: Iterator<Item = &'b [u8; BLOCK_LENGTH]>,
+            O: Iterator<Item = &'b mut [u8; BLOCK_LENGTH]>
+    {
+        for (input, output) in input.zip(output) {
+            for i in 0..BLOCK_LENGTH {
+                self.cs[i] ^= input[i];
             }
-
-            let input = array_ref!(input, 0, BLOCK_LENGTH);
-            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
-            self.buf.clone_from(input);
-            self.process_buf(output);
+            Self::process_block(self, State::Process, input, output);
         }
-
-        Ok(())
     }
 
     pub fn finalize(mut self, input: &[u8], output: &mut [u8]) {
-        assert!(input.len() < BC::BLOCK_LENGTH);
+        assert!(!input.is_empty());
+        assert!(input.len() <= BC::BLOCK_LENGTH);
         assert_eq!(input.len() + BC::BLOCK_LENGTH, output.len());
 
-        let (buf, remaining) = output.split_at_mut(BC::BLOCK_LENGTH);
+        let len = input.len();
+        let mut buf = Block::default();
+        let (output, tag) = output.split_at_mut(BC::BLOCK_LENGTH);
 
-        if !input.is_empty() {
-            let len = input.len();
-            let buf = array_mut_ref!(buf, 0, BLOCK_LENGTH);
+        buf[..len].copy_from_slice(input);
+        let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
 
-            buf[..len].copy_from_slice(input);
-            buf[len] = 0x80;
-            for b in &mut buf[len..] {
-                *b = 0x00;
-            }
+        let state =
+            if len == BC::BLOCK_LENGTH { State::LastFul }
+            else {
+                buf[len] = 0x80;
+                State::Last
+            };
 
-            self.buf.clone_from(buf);
-            self.process_buf(buf);
+        for i in 0..BLOCK_LENGTH {
+            buf[i] ^= self.cs[i];
         }
+        Self::process_block(&mut self, state, &buf, output);
 
+        // Process checksum block
         let mut tmp = Block::default();
-
-        mult!(x3; tmp, self.delta1);
-        xor!(self.delta1, tmp);
-        mult!(x3; tmp, self.delta2);
-        xor!(self.delta2, tmp);
-
-        self.process_buf(&mut tmp);
-        remaining.copy_from_slice(&tmp[..remaining.len()]);
+        Self::process_block(&mut self, State::Tag, &buf, &mut tmp);
+        tag.copy_from_slice(&tmp[..tag.len()]);
     }
 }
