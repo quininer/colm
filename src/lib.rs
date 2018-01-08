@@ -1,6 +1,6 @@
+#![no_std]
 #![feature(nll)]
 
-extern crate core;
 #[macro_use] extern crate arrayref;
 extern crate subtle;
 
@@ -29,8 +29,8 @@ impl<BC: BlockCipher> Colm<BC> {
         let mut w = Block::default();
         let mut l = Block::default();
         let mut delta0 = Block::default();
+        let     delta1;
         let mut delta2 = Block::default();
-        let delta1;
 
         // Generate the Masks
         self.0.encrypt(&mut l);
@@ -100,19 +100,13 @@ pub struct Process0<'a, BC: BlockCipher + 'a, Mode> {
 }
 
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
-    pub fn process<'b, I, O>(&mut self, input: I, output: O)
-        where
-            I: Iterator<Item = &'b [u8; BLOCK_LENGTH]>,
-            O: Iterator<Item = &'b mut [u8; BLOCK_LENGTH]>
-    {
-        for (input, output) in input.zip(output) {
-            xor!(&mut self.cs, input);
-            self.process_block(State::Process, input, output);
-        }
+    pub fn process(&mut self, input: &Block, output: &mut Block) {
+        xor!(&mut self.cs, input);
+        self.process_block(State::Process, input, output);
     }
 
     pub fn finalize(mut self, input: &[u8], output: &mut [u8]) {
-        assert!(!input.is_empty());
+        assert!(!input.is_empty()); // XXX should be allow input is empty?
         assert!(input.len() <= BC::BLOCK_LENGTH);
         assert_eq!(input.len() + BC::BLOCK_LENGTH, output.len());
 
@@ -141,15 +135,9 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
 
 
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
-    pub fn process<'b, I, O>(&mut self, input: I, output: O)
-        where
-            I: Iterator<Item = &'b [u8; BLOCK_LENGTH]>,
-            O: Iterator<Item = &'b mut [u8; BLOCK_LENGTH]>
-    {
-        for (input, output) in input.zip(output) {
-            self.process_block(State::Process, input, output);
-            xor!(&mut self.cs, output);
-        }
+    pub fn process(&mut self, input: &Block, output: &mut Block) {
+        self.process_block(State::Process, input, output);
+        xor!(&mut self.cs, output);
     }
 
     pub fn finalize(mut self, input: &[u8], output: &mut [u8]) -> bool {

@@ -1,4 +1,6 @@
-pub const KEY_LENGTH: usize = 16;
+#[cfg(feature = "x16")] pub const KEY_LENGTH: usize = 16;
+#[cfg(feature = "x32")] pub const KEY_LENGTH: usize = 32;
+
 pub const BLOCK_LENGTH: usize = 16;
 
 

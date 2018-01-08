@@ -1,3 +1,5 @@
+#![cfg(feature = "x16")]
+
 #[macro_use] extern crate arrayref;
 extern crate generic_array;
 extern crate aesni;
@@ -50,12 +52,14 @@ fn test() {
 
         let (input, input_remaining) = m.split_at(take);
         let (output, output_remaining) = c.split_at_mut(take);
-        let input = input.chunks(BLOCK_LENGTH)
-            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
-        let output = output.chunks_mut(BLOCK_LENGTH)
-            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
 
-        process.process(input, output);
+        for (input, output) in input.chunks(BLOCK_LENGTH)
+            .zip(output.chunks_mut(BLOCK_LENGTH))
+        {
+            let input = array_ref!(input, 0, BLOCK_LENGTH);
+            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
+            process.process(input, output);
+        }
         process.finalize(input_remaining, output_remaining);
     }
 
@@ -76,12 +80,14 @@ fn test() {
 
         let (input, input_remaining) = m2.split_at(take);
         let (output, output_remaining) = c2.split_at_mut(take);
-        let input = input.chunks(BLOCK_LENGTH)
-            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
-        let output = output.chunks_mut(BLOCK_LENGTH)
-            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
 
-        process.process(input, output);
+        for (input, output) in input.chunks(BLOCK_LENGTH)
+            .zip(output.chunks_mut(BLOCK_LENGTH))
+        {
+            let input = array_ref!(input, 0, BLOCK_LENGTH);
+            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
+            process.process(input, output);
+        }
         process.finalize(input_remaining, output_remaining);
     }
 
@@ -99,12 +105,14 @@ fn test() {
 
         let (input, input_remaining) = c.split_at(take);
         let (output, output_remaining) = p.split_at_mut(take);
-        let input = input.chunks(BLOCK_LENGTH)
-            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
-        let output = output.chunks_mut(BLOCK_LENGTH)
-            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
 
-        process.process(input, output);
+        for (input, output) in input.chunks(BLOCK_LENGTH)
+            .zip(output.chunks_mut(BLOCK_LENGTH))
+        {
+            let input = array_ref!(input, 0, BLOCK_LENGTH);
+            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
+            process.process(input, output);
+        }
         let r = process.finalize(input_remaining, output_remaining);
         assert!(r);
     }
@@ -123,12 +131,14 @@ fn test() {
 
         let (input, input_remaining) = c2.split_at(take);
         let (output, output_remaining) = p2.split_at_mut(take);
-        let input = input.chunks(BLOCK_LENGTH)
-            .map(|buf| array_ref!(buf, 0, BLOCK_LENGTH));
-        let output = output.chunks_mut(BLOCK_LENGTH)
-            .map(|buf| array_mut_ref!(buf, 0, BLOCK_LENGTH));
 
-        process.process(input, output);
+        for (input, output) in input.chunks(BLOCK_LENGTH)
+            .zip(output.chunks_mut(BLOCK_LENGTH))
+        {
+            let input = array_ref!(input, 0, BLOCK_LENGTH);
+            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
+            process.process(input, output);
+        }
         let r = process.finalize(input_remaining, output_remaining);
         assert!(r);
     }

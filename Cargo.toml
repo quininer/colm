@@ -3,10 +3,15 @@ name = "colm"
 version = "0.1.0"
 authors = ["quininer <quininer@live.com>"]
 
+[features]
+default = [ "x16" ]
+x16 = []
+x32 = []
+
 [dependencies]
-arrayref = "*"
-subtle = "*"
+arrayref = "0.3"
+subtle= { version = "0.3", default-features = false }
 
 [dev-dependencies]
-generic-array = "*"
-aesni = "*"
+generic-array = "0.9"
+aesni = "0.2"
