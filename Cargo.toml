@@ -2,6 +2,11 @@
 name = "colm"
 version = "0.1.0"
 authors = ["quininer <quininer@live.com>"]
+description = "a block cipher based Encrypt-Linear mix-Encrypt mode"
+repository = "https://github.com/quininer/colm"
+keywords = [ "block-cipher", "cryptography", "misuse-resistance", "aead" ]
+categories = [ "cryptography", "no-std" ]
+license = "MIT"
 
 [features]
 default = [ "x16" ]
