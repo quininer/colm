@@ -1,5 +1,6 @@
 #![no_std]
 #![feature(nll)]
+#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop, assign_op_pattern))]
 
 #[macro_use] extern crate arrayref;
 extern crate subtle;
@@ -102,7 +103,7 @@ pub struct Process0<'a, BC: BlockCipher + 'a, Mode> {
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
     pub fn process(&mut self, input: &Block, output: &mut Block) {
         xor!(&mut self.cs, input);
-        self.process_block(State::Process, input, output);
+        self.process_block::<state::Process>(input, output);
     }
 
     pub fn finalize(mut self, input: &[u8], output: &mut [u8]) {
@@ -117,18 +118,17 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
         buf[..len].copy_from_slice(input);
         let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
 
-        let state =
-            if len < BC::BLOCK_LENGTH {
-                buf[len] = 0x80;
-                State::Last
-            } else { State::LastFul };
-
         xor!(&mut buf, &self.cs);
-        self.process_block(state, &buf, output);
+        if len < BC::BLOCK_LENGTH {
+            buf[len] ^= 0x80;
+            self.process_block::<state::Last>(&buf, output);
+        } else {
+            self.process_block::<state::LastFul>(&buf, output);
+        }
 
         // Process checksum block
         let mut tmp = Block::default();
-        self.process_block(State::Tag, &buf, &mut tmp);
+        self.process_block::<state::Tag>(&buf, &mut tmp);
         tag.copy_from_slice(&tmp[..tag.len()]);
     }
 }
@@ -136,7 +136,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
 
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
     pub fn process(&mut self, input: &Block, output: &mut Block) {
-        self.process_block(State::Process, input, output);
+        self.process_block::<state::Process>(input, output);
         xor!(&mut self.cs, output);
     }
 
@@ -155,11 +155,12 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
         let (input, tag) = input.split_at(BC::BLOCK_LENGTH);
         let input = array_ref!(input, 0, BLOCK_LENGTH);
 
-        let state =
-            if len < BC::BLOCK_LENGTH { State::Last }
-            else { State::LastFul };
+        if len < BC::BLOCK_LENGTH {
+            self.process_block::<state::Last>(input, &mut buf);
+        } else {
+            self.process_block::<state::LastFul>(input, &mut buf);
+        }
 
-        self.process_block(state, input, &mut buf);
         xor!(&mut self.cs, &buf);
         let (val, remaining) = self.cs.split_at(tag.len());
         output.copy_from_slice(val);
@@ -172,7 +173,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
         let mut process = Process0 { cipher, delta1, delta2, w, cs, _mode: E };
 
         let mut tmp = Block::default();
-        process.process_block(State::Tag, &buf, &mut tmp);
+        process.process_block::<state::Tag>(&buf, &mut tmp);
         let r2 = slices_equal(tag, &tmp[..tag.len()]);
 
         r == 1 && r2 == 1

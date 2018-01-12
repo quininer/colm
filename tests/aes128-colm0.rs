@@ -42,8 +42,8 @@ fn test() {
 
 
     // encrypt 1
-    let cipher: Colm<AesCipher> = Colm::new(&key);
-    let mut process = cipher.encrypt(&nonce, &m[..10]);
+    let cipher: Colm<AesCipher> = Colm::new(key);
+    let mut process = cipher.encrypt(nonce, &m[..10]);
 
     {
         let take =
@@ -69,7 +69,7 @@ fn test() {
     // encrypt 2
     let m2 = &m[..32];
     let mut c2 = vec![0; m2.len() + BLOCK_LENGTH];
-    let mut process = cipher.encrypt(&nonce, &m2[..16]);
+    let mut process = cipher.encrypt(nonce, &m2[..16]);
 
     {
         let take =
@@ -96,7 +96,7 @@ fn test() {
 
     // decrypt 1
     let mut p = vec![0; m.len()];
-    let mut process = cipher.decrypt(&nonce, &m[..10]);
+    let mut process = cipher.decrypt(nonce, &m[..10]);
 
     {
         let take =
@@ -122,7 +122,7 @@ fn test() {
 
     // decrypt 2
     let mut p2 = vec![0; m2.len()];
-    let mut process = cipher.decrypt(&nonce, &m[..16]);
+    let mut process = cipher.decrypt(nonce, &m[..16]);
 
     {
         let take =

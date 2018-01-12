@@ -52,26 +52,6 @@ macro_rules! mult {
     }
 }
 
-macro_rules! mask {
-    ( $state:expr; $delta:expr, $xx:expr, $input:expr ) => {
-        match $state {
-            State::Process | State::Tag => {
-                mult!(x2; $delta, $delta);
-                xor!($xx, $input, $delta);
-            },
-            State::LastFul => {
-                mult!(x7; $delta, $delta);
-                xor!($xx, $input, $delta);
-            },
-            State::Last => {
-                mult!(x7; $delta, $delta);
-                mult!(x7; $delta, $delta);
-                xor!($xx, $input, $delta);
-            }
-        }
-    }
-}
-
 pub fn p(w: &mut Block, y: &mut Block, x: &Block) {
     let (mut w2, mut w3) = (Block::default(), Block::default());
     mult!(x3; &mut w3, w);
@@ -87,51 +67,84 @@ pub fn p_inv(w: &mut Block, y: &mut Block, x: &Block) {
     xor!(w, x, w);
 }
 
-pub enum State {
-    Process,
-    LastFul,
-    Last,
-    Tag
+pub trait Mask {
+    fn mask(delta: &mut Block, xx: &mut Block, input: &Block);
 }
 
+pub mod state {
+    use ::{ Block, BLOCK_LENGTH };
+    use super::Mask;
+
+    pub struct Process;
+    pub struct LastFul;
+    pub struct Last;
+    pub type Tag = Process;
+
+    impl Mask for Process {
+        #[inline]
+        fn mask(delta: &mut Block, xx: &mut Block, input: &Block) {
+            mult!(x2; delta, delta);
+            xor!(xx, input, delta);
+        }
+    }
+
+    impl Mask for LastFul {
+        #[inline]
+        fn mask(delta: &mut Block, xx: &mut Block, input: &Block) {
+            mult!(x7; delta, delta);
+            xor!(xx, input, delta);
+        }
+    }
+
+    impl Mask for Last {
+        #[inline]
+        fn mask(delta: &mut Block, xx: &mut Block, input: &Block) {
+            mult!(x7; delta, delta);
+            mult!(x7; delta, delta);
+            xor!(xx, input, delta);
+        }
+    }
+}
+
+
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
-    pub(crate) fn process_block(&mut self, state: State, input: &Block, output: &mut Block) {
-        let mut xx = Block::default();
+    pub(crate) fn process_block<State: Mask>(&mut self, input: &Block, output: &mut Block) {
+        let (mut xx, mut yy) = Default::default();
 
         // Mask
-        mask!(state; self.delta1, xx, input);
+        State::mask(&mut self.delta1, &mut xx, input);
 
         // Encrypt
         self.cipher.encrypt(&mut xx);
 
         // Linear Mixing
-        p(&mut self.w, output, &xx);
+        p(&mut self.w, &mut yy, &xx);
 
         // Encrypt
-        self.cipher.encrypt(output);
+        self.cipher.encrypt(&mut yy);
 
         // Mask
-        mask!(state; self.delta2, output, output);
+        State::mask(&mut self.delta2, output, &yy);
     }
 }
 
 impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
-    pub(crate) fn process_block(&mut self, state: State, input: &Block, output: &mut Block) {
-        let mut xx = Block::default();
+    pub(crate) fn process_block<State: Mask>(&mut self, input: &Block, output: &mut Block) {
+        let (mut xx, mut yy) = Default::default();
 
         // Mask
-        mask!(state; self.delta2, xx, input);
+        State::mask(&mut self.delta2, &mut xx, input);
 
         // Encrypt
         self.cipher.decrypt(&mut xx);
 
         // Linear Mixing
-        p_inv(&mut self.w, output, &xx);
+        p_inv(&mut self.w, &mut yy, &xx);
 
         // Encrypt
-        self.cipher.decrypt(output);
+        self.cipher.decrypt(&mut yy);
 
         // Mask
-        mask!(state; self.delta1, output, output);
+        State::mask(&mut self.delta1, output, &yy);
     }
 }
