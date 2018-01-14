@@ -5,30 +5,11 @@ extern crate generic_array;
 extern crate aesni;
 extern crate colm;
 
-use generic_array::GenericArray;
-use aesni::{ BlockCipher, Aes128 };
-use colm::Colm;
-use colm::traits::{ KEY_LENGTH, BLOCK_LENGTH, BlockCipher as BC };
+mod aead;
 
+use colm::traits::BLOCK_LENGTH;
+use aead::*;
 
-struct AesCipher(Aes128);
-
-impl BC for AesCipher {
-    const KEY_LENGTH: usize = 16;
-    const BLOCK_LENGTH: usize = 16;
-
-    fn new(key: &[u8; KEY_LENGTH]) -> Self {
-        AesCipher(Aes128::new(GenericArray::from_slice(key)))
-    }
-
-    fn encrypt(&self, block: &mut [u8; BLOCK_LENGTH]) {
-        self.0.encrypt_block(GenericArray::from_mut_slice(block));
-    }
-
-    fn decrypt(&self, block: &mut [u8; BLOCK_LENGTH]) {
-        self.0.decrypt_block(GenericArray::from_mut_slice(block));
-    }
-}
 
 #[test]
 fn test() {
@@ -42,106 +23,26 @@ fn test() {
 
 
     // encrypt 1
-    let cipher: Colm<AesCipher> = Colm::new(key);
-    let mut process = cipher.encrypt(nonce, &m[..10]);
-
-    {
-        let take =
-            if m.len() % 16 == 0 { (m.len() / 16 - 1) * 16 }
-            else { m.len() / 16 * 16 };
-
-        let (input, input_remaining) = m.split_at(take);
-        let (output, output_remaining) = c.split_at_mut(take);
-
-        for (input, output) in input.chunks(BLOCK_LENGTH)
-            .zip(output.chunks_mut(BLOCK_LENGTH))
-        {
-            let input = array_ref!(input, 0, BLOCK_LENGTH);
-            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
-            process.process(input, output);
-        }
-        process.finalize(input_remaining, output_remaining);
-    }
-
+    aead_encrypt(key, nonce, &m[..10], m, &mut c);
     assert_eq!(c, C);
 
 
     // encrypt 2
     let m2 = &m[..32];
     let mut c2 = vec![0; m2.len() + BLOCK_LENGTH];
-    let mut process = cipher.encrypt(nonce, &m2[..16]);
-
-    {
-        let take =
-            if m2.len() % 16 == 0 { (m2.len() / 16 - 1) * 16 }
-            else { m2.len() / 16 * 16 };
-
-        assert_eq!(take, 16);
-
-        let (input, input_remaining) = m2.split_at(take);
-        let (output, output_remaining) = c2.split_at_mut(take);
-
-        for (input, output) in input.chunks(BLOCK_LENGTH)
-            .zip(output.chunks_mut(BLOCK_LENGTH))
-        {
-            let input = array_ref!(input, 0, BLOCK_LENGTH);
-            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
-            process.process(input, output);
-        }
-        process.finalize(input_remaining, output_remaining);
-    }
-
+    aead_encrypt(key, nonce, &m2[..16], m2, &mut c2);
     assert_eq!(c2, C2);
 
 
     // decrypt 1
     let mut p = vec![0; m.len()];
-    let mut process = cipher.decrypt(nonce, &m[..10]);
-
-    {
-        let take =
-            if c.len() % 16 == 0 { (c.len() / 16 - 2) * 16 }
-            else { (c.len() / 16 - 1) * 16 };
-
-        let (input, input_remaining) = c.split_at(take);
-        let (output, output_remaining) = p.split_at_mut(take);
-
-        for (input, output) in input.chunks(BLOCK_LENGTH)
-            .zip(output.chunks_mut(BLOCK_LENGTH))
-        {
-            let input = array_ref!(input, 0, BLOCK_LENGTH);
-            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
-            process.process(input, output);
-        }
-        let r = process.finalize(input_remaining, output_remaining);
-        assert!(r);
-    }
-
+    let r = aead_decrypt(key, nonce, &m[..10], &c, &mut p);
+    assert!(r);
     assert_eq!(&p[..], &m[..]);
-
 
     // decrypt 2
     let mut p2 = vec![0; m2.len()];
-    let mut process = cipher.decrypt(nonce, &m[..16]);
-
-    {
-        let take =
-            if c2.len() % 16 == 0 { (c2.len() / 16 - 2) * 16 }
-            else { (c2.len() / 16 - 1) * 16 };
-
-        let (input, input_remaining) = c2.split_at(take);
-        let (output, output_remaining) = p2.split_at_mut(take);
-
-        for (input, output) in input.chunks(BLOCK_LENGTH)
-            .zip(output.chunks_mut(BLOCK_LENGTH))
-        {
-            let input = array_ref!(input, 0, BLOCK_LENGTH);
-            let output = array_mut_ref!(output, 0, BLOCK_LENGTH);
-            process.process(input, output);
-        }
-        let r = process.finalize(input_remaining, output_remaining);
-        assert!(r);
-    }
-
+    let r = aead_decrypt(key, nonce, &m[..16], &c2, &mut p2);
+    assert!(r);
     assert_eq!(&p2[..], &m2[..]);
 }
