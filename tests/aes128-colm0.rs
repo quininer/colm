@@ -2,12 +2,15 @@
 
 #[macro_use] extern crate arrayref;
 extern crate generic_array;
-extern crate aesni;
+extern crate aes_soft as aes;
+extern crate rand;
 extern crate colm;
 
 mod aead;
 
-use colm::traits::BLOCK_LENGTH;
+use rand::{ Rng, RngCore, thread_rng };
+use colm::NONCE_LENGTH;
+use colm::traits::{ BLOCK_LENGTH, KEY_LENGTH };
 use aead::*;
 
 
@@ -25,7 +28,6 @@ fn test() {
     // encrypt 1
     aead_encrypt(key, nonce, &m[..10], m, &mut c);
     assert_eq!(c, C);
-
 
     // encrypt 2
     let m2 = &m[..32];
@@ -45,4 +47,41 @@ fn test() {
     let r = aead_decrypt(key, nonce, &m[..16], &c2, &mut p2);
     assert!(r);
     assert_eq!(&p2[..], &m2[..]);
+
+
+    // decrypt 3
+    let mut p = vec![0; m.len()];
+    let mut m3 = m.clone();
+    m3[7] ^= 0x42;
+    let r = aead_decrypt(key, nonce, &m3[..10], &c, &mut p);
+    assert!(!r);
+
+    // decrypt 4
+    let mut p2 = vec![0; m2.len()];
+    c2[33] ^= 0x42;
+    let r = aead_decrypt(key, nonce, &m[..16], &c2, &mut p2);
+    assert!(!r);
+}
+
+#[test]
+fn test_aead() {
+    for _ in 0..100 {
+        let mut key = [0; KEY_LENGTH];
+        let mut nonce = [0; NONCE_LENGTH];
+        let mut aad = vec![0; thread_rng().gen_range(1, 128)];
+        let mut m = vec![0; thread_rng().gen_range(1, 256)];
+        let mut c = vec![0; m.len() + BLOCK_LENGTH];
+        let mut p = vec![0; m.len()];
+
+        thread_rng().fill_bytes(&mut key);
+        thread_rng().fill_bytes(&mut nonce);
+        thread_rng().fill_bytes(&mut aad);
+        thread_rng().fill_bytes(&mut m);
+
+        aead_encrypt(&key, &nonce, &aad, &m, &mut c);
+        let r = aead_decrypt(&key, &nonce, &aad, &c, &mut p);
+        assert!(r);
+
+        assert_eq!(p, m);
+    }
 }

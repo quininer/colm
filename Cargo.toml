@@ -1,6 +1,6 @@
 [package]
 name = "colm"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["quininer <quininer@live.com>"]
 description = "A block cipher based Encrypt-Linear mix-Encrypt mode"
 repository = "https://github.com/quininer/colm"
@@ -15,8 +15,9 @@ x32 = []
 
 [dependencies]
 arrayref = "0.3"
-subtle= { version = "0.3", default-features = false }
+subtle = { version = "0.6", default-features = false }
 
 [dev-dependencies]
 generic-array = "0.9"
-aesni = "0.2"
+aes-soft = "0.1"
+rand = "0.5"

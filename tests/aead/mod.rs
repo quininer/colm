@@ -1,5 +1,5 @@
 use generic_array::GenericArray;
-use aesni::{ BlockCipher, Aes128 };
+use aes::{ BlockCipher, Aes128 };
 use colm::{ Colm, NONCE_LENGTH };
 use colm::traits::{ KEY_LENGTH, BLOCK_LENGTH, BlockCipher as BC };
 

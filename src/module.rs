@@ -107,7 +107,7 @@ pub mod state {
 }
 
 
-impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
+impl<'a, BC: BlockCipher + 'a> Process0<'a, BC, E> {
     pub(crate) fn process_block<State: Mask>(&mut self, input: &Block, output: &mut Block) {
         let (mut xx, mut yy) = Default::default();
 
@@ -128,7 +128,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
     }
 }
 
-impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
+impl<'a, BC: BlockCipher + 'a> Process0<'a, BC, D> {
     pub(crate) fn process_block<State: Mask>(&mut self, input: &Block, output: &mut Block) {
         let (mut xx, mut yy) = Default::default();
 

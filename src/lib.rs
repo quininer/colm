@@ -9,12 +9,13 @@ extern crate subtle;
 pub mod traits;
 
 use core::iter;
-use subtle::slices_equal;
+use subtle::ConstantTimeEq;
 use traits::{ KEY_LENGTH, BLOCK_LENGTH };
 use traits::BlockCipher;
 use module::*;
 
 
+#[derive(Debug, Clone)]
 pub struct Colm<BC: BlockCipher>(BC);
 pub struct E;
 pub struct D;
@@ -27,7 +28,6 @@ impl<BC: BlockCipher> Colm<BC> {
     }
 
     fn init(&self, nonce: &[u8; NONCE_LENGTH], aad: &[u8]) -> (Block, Block, Block) {
-        let mut w = Block::default();
         let mut l = Block::default();
         let mut delta0 = Block::default();
         let     delta1;
@@ -46,9 +46,9 @@ impl<BC: BlockCipher> Colm<BC> {
         // make the first block blk based on npub and param
         nonce_block[..NONCE_LENGTH].copy_from_slice(nonce);
 
-        iter::once(&nonce_block[..])
+        let w = iter::once(&nonce_block[..])
             .chain(aad.chunks(BC::BLOCK_LENGTH))
-            .for_each(|next| {
+            .fold(Block::default(), |mut sum, next| {
                 // Process the current Block
                 let len = next.len();
                 let mut xx = Block::default();
@@ -62,7 +62,9 @@ impl<BC: BlockCipher> Colm<BC> {
                 }
                 xor!(xx, delta0);
                 self.0.encrypt(&mut xx);
-                xor!(w, xx);
+                xor!(sum, xx);
+
+                sum
             });
 
         (delta1, delta2, w)
@@ -165,7 +167,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
         let (val, remaining) = self.cs.split_at(tag.len());
         output.copy_from_slice(val);
 
-        let r = slices_equal(remaining, &OZS[..remaining.len()]);
+        let r = remaining.ct_eq(&OZS[..remaining.len()]);
 
 
         // Process checksum block
@@ -174,8 +176,8 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
 
         let mut tmp = Block::default();
         process.process_block::<state::Tag>(&buf, &mut tmp);
-        let r2 = slices_equal(tag, &tmp[..tag.len()]);
+        let r2 = tag.ct_eq(&tmp[..tag.len()]);
 
-        r == 1 && r2 == 1
+        r.unwrap_u8() == 1 && r2.unwrap_u8() == 1
     }
 }
