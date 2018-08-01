@@ -2,7 +2,7 @@
 
 #[macro_use] extern crate arrayref;
 extern crate generic_array;
-extern crate aes_soft as aes;
+extern crate aes;
 extern crate rand;
 extern crate colm;
 
