@@ -18,6 +18,9 @@ arrayref = "0.3"
 subtle = { version = "0.7", default-features = false }
 
 [dev-dependencies]
+libc = "*"
+openssl = "*"
+openssl-sys = "*"
 generic-array = "0.9"
-aes-soft = "0.2"
+aes = "0.2"
 rand = "0.5"

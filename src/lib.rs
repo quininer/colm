@@ -28,30 +28,30 @@ impl<BC: BlockCipher> Colm<BC> {
     }
 
     fn init(&self, nonce: &[u8; NONCE_LENGTH], aad: &[u8]) -> (Block, Block, Block) {
-        let mut l = Block::default();
-        let mut delta0 = Block::default();
+        let mut l = [0; BLOCK_LENGTH];
+        let mut delta0 = [0; BLOCK_LENGTH];
         let     delta1;
-        let mut delta2 = Block::default();
+        let mut delta2 = [0; BLOCK_LENGTH];
 
         // Generate the Masks
         self.0.encrypt(&mut l);
-        let mut l3 = Block::default();
+        let mut l3 = [0; BLOCK_LENGTH];
         mult!(x3; &mut l3, &l);
         mult!(inv2; &mut delta0, &l3);
         delta1 = l;
         mult!(x3; &mut delta2, &l3);
 
         // Process Associated Data
-        let mut nonce_block = Block::default();
+        let mut nonce_block = [0; BLOCK_LENGTH];
         // make the first block blk based on npub and param
         nonce_block[..NONCE_LENGTH].copy_from_slice(nonce);
 
         let w = iter::once(&nonce_block[..])
             .chain(aad.chunks(BC::BLOCK_LENGTH))
-            .fold(Block::default(), |mut sum, next| {
+            .fold([0; BLOCK_LENGTH], |mut sum, next| {
                 // Process the current Block
                 let len = next.len();
-                let mut xx = Block::default();
+                let mut xx = [0; BLOCK_LENGTH];
 
                 xx[..len].copy_from_slice(next);
                 if len < BC::BLOCK_LENGTH {
@@ -76,7 +76,7 @@ impl<BC: BlockCipher> Colm<BC> {
         Process0 {
             cipher: &self.0,
             delta1, delta2, w,
-            cs: Block::default(),
+            cs: [0; BLOCK_LENGTH],
             _mode: E
         }
     }
@@ -87,7 +87,7 @@ impl<BC: BlockCipher> Colm<BC> {
         Process0 {
             cipher: &self.0,
             delta1, delta2, w,
-            cs: Block::default(),
+            cs: [0; BLOCK_LENGTH],
             _mode: D
         }
     }
@@ -114,7 +114,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
         assert_eq!(input.len() + BC::BLOCK_LENGTH, output.len());
 
         let len = input.len();
-        let mut buf = Block::default();
+        let mut buf = [0; BLOCK_LENGTH];
         let (output, tag) = output.split_at_mut(BC::BLOCK_LENGTH);
 
         buf[..len].copy_from_slice(input);
@@ -129,7 +129,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, E> {
         }
 
         // Process checksum block
-        let mut tmp = Block::default();
+        let mut tmp = [0; BLOCK_LENGTH];
         self.process_block::<state::Tag>(&buf, &mut tmp);
         tag.copy_from_slice(&tmp[..tag.len()]);
     }
@@ -153,7 +153,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
         assert_eq!(input.len(), output.len() + BC::BLOCK_LENGTH);
 
         let len = input.len() - BC::BLOCK_LENGTH;
-        let mut buf = Block::default();
+        let mut buf = [0; BLOCK_LENGTH];
         let (input, tag) = input.split_at(BC::BLOCK_LENGTH);
         let input = array_ref!(input, 0, BLOCK_LENGTH);
 
@@ -174,7 +174,7 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
         let Process0 { cipher, delta1, delta2, w, cs, .. } = self;
         let mut process = Process0 { cipher, delta1, delta2, w, cs, _mode: E };
 
-        let mut tmp = Block::default();
+        let mut tmp = [0; BLOCK_LENGTH];
         process.process_block::<state::Tag>(&buf, &mut tmp);
         let r2 = tag.ct_eq(&tmp[..tag.len()]);
 

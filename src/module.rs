@@ -39,29 +39,31 @@ macro_rules! mult {
     };
 
     ( x3 ; $res:expr, $s:expr ) => {
-        let mut res = Block::default();
+        let mut res = [0; BLOCK_LENGTH];
         mult!(x2; &mut res, $s);
         xor!($res, &res, $s);
     };
 
     ( x7 ; $res:expr, $s:expr ) => {
-        let mut res = Block::default();
+        let mut res = [0; BLOCK_LENGTH];
         mult!(x2; &mut res, $s);
         mult!(x3; &mut res, &res);
         xor!($res, &res, $s);
     }
 }
 
+#[inline]
 pub fn p(w: &mut Block, y: &mut Block, x: &Block) {
-    let (mut w2, mut w3) = (Block::default(), Block::default());
+    let (mut w2, mut w3) = ([0; BLOCK_LENGTH], [0; BLOCK_LENGTH]);
     mult!(x3; &mut w3, w);
     mult!(x2; &mut w2, w);
     xor!(y, x, w3);
     xor!(w, x, w2);
 }
 
+#[inline]
 pub fn p_inv(w: &mut Block, y: &mut Block, x: &Block) {
-    let mut w3 = Block::default();
+    let mut w3 = [0; BLOCK_LENGTH];
     mult!(x3; &mut w3, w);
     xor!(y, x, w3);
     xor!(w, x, w);
@@ -109,7 +111,7 @@ pub mod state {
 
 impl<'a, BC: BlockCipher + 'a> Process0<'a, BC, E> {
     pub(crate) fn process_block<State: Mask>(&mut self, input: &Block, output: &mut Block) {
-        let (mut xx, mut yy) = Default::default();
+        let (mut xx, mut yy) = ([0; BLOCK_LENGTH], [0; BLOCK_LENGTH]);
 
         // Mask
         State::mask(&mut self.delta1, &mut xx, input);
@@ -130,7 +132,7 @@ impl<'a, BC: BlockCipher + 'a> Process0<'a, BC, E> {
 
 impl<'a, BC: BlockCipher + 'a> Process0<'a, BC, D> {
     pub(crate) fn process_block<State: Mask>(&mut self, input: &Block, output: &mut Block) {
-        let (mut xx, mut yy) = Default::default();
+        let (mut xx, mut yy) = ([0; BLOCK_LENGTH], [0; BLOCK_LENGTH]);
 
         // Mask
         State::mask(&mut self.delta2, &mut xx, input);
