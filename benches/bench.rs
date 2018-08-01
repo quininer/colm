@@ -4,7 +4,7 @@ extern crate test;
 
 #[macro_use] extern crate arrayref;
 extern crate generic_array;
-extern crate aesni;
+extern crate aes_soft as aes;
 extern crate colm;
 
 #[path = "../tests/aead/mod.rs"]

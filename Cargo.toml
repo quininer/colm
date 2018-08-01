@@ -15,9 +15,9 @@ x32 = []
 
 [dependencies]
 arrayref = "0.3"
-subtle = { version = "0.6", default-features = false }
+subtle = { version = "0.7", default-features = false }
 
 [dev-dependencies]
 generic-array = "0.9"
-aes-soft = "0.1"
+aes-soft = "0.2"
 rand = "0.5"

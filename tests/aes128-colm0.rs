@@ -65,7 +65,7 @@ fn test() {
 
 #[test]
 fn test_aead() {
-    for _ in 0..100 {
+    for i in 0..100 {
         let mut key = [0; KEY_LENGTH];
         let mut nonce = [0; NONCE_LENGTH];
         let mut aad = vec![0; thread_rng().gen_range(1, 128)];
@@ -80,8 +80,11 @@ fn test_aead() {
 
         aead_encrypt(&key, &nonce, &aad, &m, &mut c);
         let r = aead_decrypt(&key, &nonce, &aad, &c, &mut p);
-        assert!(r);
+        assert!(r, "{} times", i);
+        assert_eq!(p, m, "{} times", i);
 
-        assert_eq!(p, m);
+        c[0] ^= 0x42;
+        let r = aead_decrypt(&key, &nonce, &aad, &c, &mut p);
+        assert!(!r, "{} times", i);
     }
 }

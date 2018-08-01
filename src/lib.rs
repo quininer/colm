@@ -178,6 +178,6 @@ impl<'a, BC : BlockCipher + 'a> Process0<'a, BC, D> {
         process.process_block::<state::Tag>(&buf, &mut tmp);
         let r2 = tag.ct_eq(&tmp[..tag.len()]);
 
-        r.unwrap_u8() == 1 && r2.unwrap_u8() == 1
+        (r & r2).unwrap_u8() == 1
     }
 }
